@@ -2,8 +2,10 @@
 
 ## Tl;DR Spoiler
 
->! A race condition on the kernel heap can be used with a `msg_msg` struct to overwrite a function
->! pointer. Then, ret2usr to win!
+<details>
+A race condition on the kernel heap can be used with a `msg_msg` struct to overwrite a function
+pointer. Then, ret2usr to win!
+</details>
 
 ## Summary
 
