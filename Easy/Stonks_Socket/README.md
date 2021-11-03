@@ -252,7 +252,7 @@ there was a possible race condition here, it would involve being able to have ac
 structure after it is freed. Luckily, in the beginning of `stonks_rocket`, this pointer is assigned
 to a local variable!
 
-```
+```c
 struct StonksSocket *s_sk = sk->sk_user_data;
 ```
 
@@ -261,7 +261,7 @@ heap, which will actually be some other type of object. However, why is this use
 requires us to understand the members of this `StonksSocket` structure a bit more, as well as the
 size of it.
 
-```
+```c
 struct StonksSocket {
     unsigned hash_size;
     u64 hash_rounds;
@@ -276,5 +276,55 @@ can create a chunk of size 0x20 in the kernel heap with user controlled data at 
 call an arbitrary function! This is a great primitive, but this requires us to understand some
 useful kernel heap objects a bit more.
 
+At this point, our goal is to find a kernel structure of size 0x20 (or between 0x11 and 0x20) that
+lets us control the final qword. Luckily, I have recently used a very nice structure in recent CTF
+challenges, known as a `msg_msg` structure. This structure is used to hold the contents of messages
+that are sent with `sendmsg` and received with `recvmsg`. The main body of the messages, including
+the header, is set up as follows:
+
+```
+struct msg_msg {
+	struct list_head m_list;
+	long m_type;
+	size_t m_ts;		/* message text size */
+	struct msg_msgseg *next;
+	void *security;
+	/* the actual message follows immediately */
+};
+```
+
+The maximum size of this structure, including the message that is stored directly after, is 0x400
+bytes. However, this means that the body of a message should only be 0x400-0x30 bytes large, what
+happens with larger messages? That is where the `next` pointer comes in:
+
+```
+struct msg_msgseg {
+	struct msg_msgseg *next;
+	/* the next part of the message follows immediately */
+};
+```
+
+This structure is allocated for any following messages, and the size of this is must be less than or
+equal to 0x400 bytes as well. This is great for us, because we can have a `msg_msgseg` structure of
+size 0x20 bytes large. To do this, we must send a message with (0x400-0x30) bytes to fill the
+`msg_msg` struct and (0x20-0x8) bytes to fit a `msg_msgseg` struct of size 0x20. If we do this, the
+last 8 bytes of our message will overlap with the `hash_function` function pointer in the
+`StonksSocket` structure. 
+
+In order to understand this better, I will explain what happens.
+
+* First, create a second thread with `pthread_create`.
+* In one thread, create a socket, and use the `OPTION_CALL` to attach a `StonksSocket` structure to
+  the socket's `sk_user_data`.
+* With the same socket in the same thread, `connect` to a port on localhost.
+* With the second thread, create a socket, `bind` to the port that the other socket is connecting to,
+  `listen`, and `accept` a connection.
+* In the first thread, use `recv` to wait for incoming data.
+* In the second thread, use the `OPTION_PUT` ioctl to free the `sk_user_data` for the first thread's
+  socket, leaving the `s_sk` pointer in `stonks_rocket` as a dangling pointer.
+* Again in the second thread, create a message queue and use `msgsnd` to send a message with a body
+  of size `0x1000-0x30+0x20-0x8`. The last 8 bytes of this will be your function pointer.
+* Finally, in the second thread, send a message to the socket.
+* In the first thread, as this message is received, the function pointer will be called!
 
 TODO: FINISH
