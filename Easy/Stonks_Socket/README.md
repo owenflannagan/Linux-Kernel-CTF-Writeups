@@ -210,7 +210,7 @@ understand. In the `secure_hash` function, I noticed that there was no bounds ch
 `h->length`, so you could initialize data after the 4 qwords in the `Hash` structure. This is
 obviously a stack overflow, and I was very excited to see such a simple and obvious bug. 
 
-```
+```c
 struct Hash {
     u64 word1;
     u64 word2;
