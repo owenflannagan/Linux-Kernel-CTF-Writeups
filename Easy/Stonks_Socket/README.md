@@ -282,7 +282,7 @@ challenges, known as a `msg_msg` structure. This structure is used to hold the c
 that are sent with `sendmsg` and received with `recvmsg`. The main body of the messages, including
 the header, is set up as follows:
 
-```
+```c
 struct msg_msg {
 	struct list_head m_list;
 	long m_type;
@@ -297,7 +297,7 @@ The maximum size of this structure, including the message that is stored directl
 bytes. However, this means that the body of a message should only be 0x400-0x30 bytes large, what
 happens with larger messages? That is where the `next` pointer comes in:
 
-```
+```c
 struct msg_msgseg {
 	struct msg_msgseg *next;
 	/* the next part of the message follows immediately */
